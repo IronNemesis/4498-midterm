@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import NewProjectForm from "@/components/NewProjectForm";
+import Shell from "@/components/Shell";
 import { currentUser } from "@/lib/auth";
 
 async function Form() {
@@ -10,17 +10,16 @@ async function Form() {
 
 export default function NewProjectPage() {
   return (
-    <main className="wrap">
-      <div className="top">
-        <div>
-          <h1>Create a project</h1>
-          <p className="muted">Upload your documents and add your team. The agent does the setup.</p>
-        </div>
-        <Link className="link" href="/">Back to my project</Link>
+    <Shell>
+      <div className="page">
+        <div className="cover" />
+        <div className="page-icon">+</div>
+        <h1 className="page-title">New project</h1>
+        <p className="page-sub">Drop in your assignment and add your team. The agent reads it, sets everything up, and drafts a plan you can approve.</p>
+        <Suspense fallback={<div className="skeleton" style={{ marginTop: "2rem" }} />}>
+          <Form />
+        </Suspense>
       </div>
-      <Suspense fallback={<p className="muted">Loading…</p>}>
-        <Form />
-      </Suspense>
-    </main>
+    </Shell>
   );
 }

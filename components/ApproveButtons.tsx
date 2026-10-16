@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { celebrate } from "./celebrate";
 
 interface Props {
   proposalId: string;
@@ -25,19 +26,24 @@ export default function ApproveButtons({ proposalId, acceptLabel, declineLabel =
     const j = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) return setMessage(j.error ?? `Request failed (${res.status})`);
-    if (j.status === "waiting") setMessage("Your acceptance is recorded. Waiting on your teammate.");
+    if (j.status === "approved") celebrate(false);
+    if (j.status === "waiting") setMessage("You're in. Waiting on your teammate to accept.");
     router.refresh();
   }
 
   return (
-    <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+    <div className="row" style={{ marginTop: "0.4rem" }}>
       <button className="primary" disabled={busy} onClick={() => decide("accept")}>
-        {acceptLabel}
+        {busy ? "Saving…" : acceptLabel}
       </button>
-      <button disabled={busy} onClick={() => decide("decline")}>
+      <button className="ghost" disabled={busy} onClick={() => decide("decline")}>
         {declineLabel}
       </button>
-      {message ? <span className="muted" role="status">{message}</span> : null}
+      {message ? (
+        <span className="muted small" role="status">
+          {message}
+        </span>
+      ) : null}
     </div>
   );
 }

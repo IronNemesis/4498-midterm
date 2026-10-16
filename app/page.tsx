@@ -1,23 +1,27 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import Dashboard from "@/components/Dashboard";
-import { signOut } from "./actions";
+import Shell from "@/components/Shell";
+
+function Loading() {
+  return (
+    <div className="page">
+      <div className="cover" />
+      <div className="page-icon">TT</div>
+      <div style={{ maxWidth: 420, marginTop: "1.5rem" }}>
+        <div className="skeleton" style={{ height: 28, width: "70%" }} />
+        <div className="skeleton" />
+        <div className="skeleton" style={{ width: "55%" }} />
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <main className="wrap">
-      <div className="top">
-        <strong>Team Tank</strong>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          <Link className="link" href="/new">New project</Link>
-          <form action={signOut}>
-            <button type="submit">Sign out</button>
-          </form>
-        </div>
-      </div>
-      <Suspense fallback={<p className="muted">Loading your project…</p>}>
+    <Shell>
+      <Suspense fallback={<Loading />}>
         <Dashboard />
       </Suspense>
-    </main>
+    </Shell>
   );
 }

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import AgentActivity, { type ActivityItem } from "./AgentActivity";
+import { celebrate } from "./celebrate";
+import { Avatar, Icon } from "./ui";
 
 interface Person {
   name: string;
@@ -9,13 +12,6 @@ interface Person {
   skills_text: string;
   prefs_text: string;
   weekly_hours: number;
-}
-
-interface Stage {
-  id: string;
-  status: "running" | "done" | "error";
-  label: string;
-  detail?: string;
 }
 
 interface Done {
@@ -29,15 +25,17 @@ const blank = (email = ""): Person => ({ name: "", email, skills_text: "", prefs
 
 export default function NewProjectForm({ defaultEmail }: { defaultEmail: string }) {
   const [files, setFiles] = useState<File[]>([]);
+  const [over, setOver] = useState(false);
   const [name, setName] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [team, setTeam] = useState<Person[]>([blank(defaultEmail), blank()]);
   const [running, setRunning] = useState(false);
-  const [stages, setStages] = useState<Stage[]>([]);
+  const [items, setItems] = useState<ActivityItem[]>([]);
   const [error, setError] = useState("");
   const [done, setDone] = useState<Done | null>(null);
 
   const update = (i: number, patch: Partial<Person>) => setTeam((t) => t.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  const addFiles = (list: FileList | null) => setFiles((prev) => [...prev, ...Array.from(list ?? [])].filter((f, i, all) => all.findIndex((g) => g.name === f.name) === i));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +44,7 @@ export default function NewProjectForm({ defaultEmail }: { defaultEmail: string 
     if (team.some((p) => !p.name.trim() || !p.email.trim())) return setError("Every teammate needs a name and an email.");
 
     setRunning(true);
-    setStages([]);
+    setItems([]);
     setDone(null);
     const body = new FormData();
     for (const f of files) body.append("files", f);
@@ -72,16 +70,12 @@ export default function NewProjectForm({ defaultEmail }: { defaultEmail: string 
         for (const line of lines.filter(Boolean)) {
           const event = JSON.parse(line);
           if (event.type === "stage") {
-            setStages((prev) => {
-              const next = prev.filter((s) => s.id !== event.id);
-              const index = prev.findIndex((s) => s.id === event.id);
-              const stage: Stage = { id: event.id, status: event.status, label: event.label, detail: event.detail };
-              if (index === -1) return [...next, stage];
-              next.splice(index, 0, stage);
-              return next;
-            });
-          } else if (event.type === "done") setDone(event);
-          else if (event.type === "error") setError(event.message);
+            const item: ActivityItem = { key: event.id, status: event.status, label: event.label, detail: event.detail || undefined };
+            setItems((prev) => (prev.some((p) => p.key === item.key) ? prev.map((p) => (p.key === item.key ? item : p)) : [...prev, item]));
+          } else if (event.type === "done") {
+            setDone(event);
+            celebrate();
+          } else if (event.type === "error") setError(event.message);
         }
       }
     } catch (err) {
@@ -91,75 +85,135 @@ export default function NewProjectForm({ defaultEmail }: { defaultEmail: string 
     }
   }
 
+  const started = running || items.length > 0;
+
   return (
     <form onSubmit={submit}>
-      <div className="card">
-        <h2>1. Project documents</h2>
-        <p className="muted" style={{ marginBottom: "0.6rem" }}>
-          Upload the assignment, rubric, or syllabus (PDF, TXT, or MD; under 4 MB total). The agent reads them and sets everything up.
-        </p>
-        <input type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
-        <div className="row2" style={{ marginTop: "0.75rem" }}>
-          <input placeholder="Project name (optional, the agent finds it)" value={name} onChange={(e) => setName(e.target.value)} />
-          <input type="date" aria-label="Due date override" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      <h2 className="h2">
+        <span className="section-num">1</span>Project documents
+      </h2>
+      <label
+        className={`dropzone ${over ? "over" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          addFiles(e.dataTransfer.files);
+        }}
+      >
+        <input type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" onChange={(e) => addFiles(e.target.files)} />
+        <div className="dz-icon">{Icon.upload}</div>
+        <div style={{ fontWeight: 600 }}>Drop your assignment, rubric, or syllabus here</div>
+        <div className="muted small">or click to browse · PDF, TXT, or MD · under 4 MB total</div>
+      </label>
+      {files.length > 0 ? (
+        <div className="file-chips">
+          {files.map((f) => (
+            <span className="pill blue" key={f.name}>
+              <span style={{ width: 14, height: 14, display: "inline-flex" }}>{Icon.file}</span>
+              {f.name}
+              <button type="button" className="ghost sm" style={{ padding: "0 0.2rem", color: "inherit" }} aria-label={`Remove ${f.name}`} onClick={() => setFiles((all) => all.filter((x) => x !== f))}>
+                ✕
+              </button>
+            </span>
+          ))}
         </div>
-        <p className="muted" style={{ marginTop: "0.4rem" }}>
-          Leave the name and date blank to use what the documents say.
-        </p>
+      ) : null}
+
+      <div className="grid2" style={{ marginTop: "1rem" }}>
+        <label className="field">
+          Project name <span className="muted" style={{ fontWeight: 400 }}>optional, the agent finds it</span>
+          <input placeholder="BUS 3394 Group Project" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          Due date <span className="muted" style={{ fontWeight: 400 }}>optional override</span>
+          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </label>
       </div>
 
-      <div className="card">
-        <h2>2. Your team</h2>
+      <h2 className="h2">
+        <span className="section-num">2</span>Your team
+      </h2>
+      <div className="stack">
         {team.map((p, i) => (
-          <div className="person" key={i}>
-            <div className="row2">
-              <input placeholder="Name" value={p.name} onChange={(e) => update(i, { name: e.target.value })} />
-              <input type="email" placeholder="Email (they sign in with this)" value={p.email} onChange={(e) => update(i, { email: e.target.value })} />
+          <div className="member-card" key={i}>
+            <div className="spread">
+              <div className="row">
+                <Avatar name={p.name || p.email || `Teammate ${i + 1}`} size="lg" />
+                <strong>{p.name || `Teammate ${i + 1}`}</strong>
+                {i === 0 ? <span className="pill gray">You</span> : null}
+              </div>
+              {i > 0 ? (
+                <button type="button" className="ghost sm" onClick={() => setTeam((t) => t.filter((_, j) => j !== i))}>
+                  Remove
+                </button>
+              ) : null}
             </div>
-            <div className="grid" style={{ marginTop: "0.6rem" }}>
-              <textarea rows={2} placeholder="Skills, in your own words (for example: strong writer, good with diagrams)" value={p.skills_text} onChange={(e) => update(i, { skills_text: e.target.value })} />
-              <textarea rows={2} placeholder="Preferences or things to avoid" value={p.prefs_text} onChange={(e) => update(i, { prefs_text: e.target.value })} />
-              <label className="muted">
-                Hours per week available:{" "}
-                <input type="number" min={0} max={80} style={{ width: "5rem" }} value={p.weekly_hours} onChange={(e) => update(i, { weekly_hours: Number(e.target.value) })} />
-                {team.length > 1 && i > 0 ? (
-                  <button type="button" style={{ marginLeft: "1rem" }} onClick={() => setTeam((t) => t.filter((_, j) => j !== i))}>
-                    Remove
-                  </button>
-                ) : null}
+            <div className="grid2">
+              <label className="field">
+                Name
+                <input placeholder="Full name" value={p.name} onChange={(e) => update(i, { name: e.target.value })} />
+              </label>
+              <label className="field">
+                Email <span className="muted" style={{ fontWeight: 400 }}>they sign in with this</span>
+                <input type="email" placeholder="name@example.com" value={p.email} onChange={(e) => update(i, { email: e.target.value })} />
               </label>
             </div>
+            <div className="grid2">
+              <label className="field">
+                Skills
+                <textarea rows={2} placeholder="Strong writer, good with diagrams…" value={p.skills_text} onChange={(e) => update(i, { skills_text: e.target.value })} />
+              </label>
+              <label className="field">
+                Preferences
+                <textarea rows={2} placeholder="Prefers writing, avoids presenting…" value={p.prefs_text} onChange={(e) => update(i, { prefs_text: e.target.value })} />
+              </label>
+            </div>
+            <label className="field" style={{ maxWidth: 200 }}>
+              Hours per week
+              <input type="number" min={0} max={80} value={p.weekly_hours} onChange={(e) => update(i, { weekly_hours: Number(e.target.value) })} />
+            </label>
           </div>
         ))}
-        <button type="button" onClick={() => setTeam((t) => [...t, blank()])}>
-          Add a teammate
+        <button type="button" className="ghost" style={{ justifySelf: "start" }} onClick={() => setTeam((t) => [...t, blank()])}>
+          {Icon.plus} Add a teammate
         </button>
       </div>
 
-      <button className="primary" type="submit" disabled={running}>
-        {running ? "Setting up…" : "Create project and draft the plan"}
-      </button>
+      <div className="divider" />
 
-      {stages.length > 0 || error ? (
-        <div className="card" style={{ marginTop: "1rem" }} aria-live="polite">
-          <h2>Setting up your project</h2>
-          {stages.map((s) => (
-            <div className="stage" key={s.id}>
-              <span className={`badge ${s.status === "done" ? "ok" : s.status === "error" ? "bad" : ""}`}>{s.status === "running" ? "working" : s.status}</span>
-              <div>
-                <div>{s.label}</div>
-                {s.detail ? <div className="muted">{s.detail}</div> : null}
-              </div>
-            </div>
-          ))}
-          {error ? <p className="bad" role="alert" style={{ marginTop: "0.5rem" }}>{error}</p> : null}
-          {done ? (
-            <p style={{ marginTop: "0.75rem" }}>
-              <Link className="link" href="/">
-                Review the plan ({done.stepCount} steps)
-              </Link>
+      <div className="row">
+        <button className="primary big" type="submit" disabled={running}>
+          <span style={{ width: 18, height: 18, display: "inline-flex" }}>{Icon.sparkle}</span>
+          {running ? "Agent is setting things up…" : "Create project and draft the plan"}
+        </button>
+        {!started ? <span className="muted small">Takes about a minute. You can watch it work.</span> : null}
+      </div>
+
+      {started ? <AgentActivity title="Setting up your project" working={running} failed={Boolean(error)} items={items} /> : null}
+
+      {error ? (
+        <p className="error" role="alert" style={{ marginTop: "0.6rem" }}>
+          {error}
+        </p>
+      ) : null}
+
+      {done ? (
+        <div className="callout blue fade-in">
+          <div className="callout-icon">{Icon.sparkle}</div>
+          <div className="callout-body">
+            <div className="callout-title">Your plan is ready: {done.stepCount} steps</div>
+            <p className="muted" style={{ marginBottom: "0.5rem" }}>
+              {done.passed ? "It passed every manageability check." : "A few checks need a look before you approve."}
             </p>
-          ) : null}
+            <Link className="link" href="/">
+              Open your project →
+            </Link>
+          </div>
         </div>
       ) : null}
     </form>
