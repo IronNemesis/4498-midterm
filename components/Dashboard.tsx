@@ -107,7 +107,7 @@ function Progress({ rows, people }: { rows: Row[]; people: string[] }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   const doneSteps = rows.filter((r) => r.status === "done").length;
   return (
-    <div className="card progress-card">
+    <div className="card progress-card" id="progress">
       <div className="progress-top">
         <div>
           <div className="muted small" style={{ fontWeight: 600 }}>Total project progress</div>
@@ -356,7 +356,7 @@ export default async function Dashboard() {
         <>
           <Progress rows={liveRows} people={people} />
 
-          <h2 className="h2">Your next steps</h2>
+          <h2 className="h2" id="next">Your next steps</h2>
           {next.length > 0 ? (
             next.map((r) => (
               <div className="todo" key={r.id}>
@@ -382,7 +382,7 @@ export default async function Dashboard() {
             </Callout>
           )}
 
-          <h2 className="h2">Plan</h2>
+          <h2 className="h2" id="plan">Plan</h2>
           <PlanTables rows={liveRows} live />
         </>
       ) : null}
