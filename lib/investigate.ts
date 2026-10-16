@@ -6,7 +6,7 @@ import { MODEL_ID } from "./env";
 import { db } from "./supabase";
 import { checkManageability, MAX_STEP_HOURS, MIN_BUFFER_DAYS } from "./manageability";
 import { applyInMemory, Replan } from "./replan";
-import type { Dependency, Member, Step } from "./types";
+import type { Dependency, ManageabilityReport, Member, Step } from "./types";
 import type { Emit } from "./pipeline";
 
 // T4 containment: read-only tools, a hard cap on tool calls and on wall-clock time.
@@ -15,8 +15,11 @@ export const TIME_LIMIT_MS = 60_000;
 
 const idInput = (name: string, description: string) => ({
   type: "object" as const,
-  properties: { [name]: { type: "string", description } },
-  required: [name],
+  properties: {
+    [name]: { type: "string", description },
+    why: { type: "string", description: "One short sentence for teammates: what this call should tell you, given what you know so far" },
+  },
+  required: [name, "why"],
 });
 
 const TOOLS: Anthropic.Tool[] = [
@@ -110,6 +113,13 @@ export async function investigateSlip({ projectId, checkinId, stepId, emit }: In
     `Their note: "${checkin.note || "(no note)"}". Hours logged on this check-in: ${checkin.hours_logged}.`,
   ].join("\n");
 
+  const { data: steps } = await db().from("steps").select("*").eq("project_id", projectId);
+  const { data: deps } = await db()
+    .from("step_dependencies")
+    .select("step_id, depends_on_step_id")
+    .in("step_id", (steps ?? []).map((s) => s.id));
+  const check = (r: Replan) => checkManageability({ ...applyInMemory((steps ?? []) as Step[], (deps ?? []) as Dependency[], r.changes), members: team, projectDueDate: project.due_date });
+
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: context }];
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIME_LIMIT_MS);
@@ -117,16 +127,18 @@ export async function investigateSlip({ projectId, checkinId, stepId, emit }: In
   let seq = 0;
   let nudged = false;
   let replan: Replan | null = null;
+  let finalReport: ManageabilityReport | null = null;
+  let revised = false;
 
   try {
     while (!replan) {
       const res = await claude().messages.create({ model: MODEL_ID(), max_tokens: 6000, system, tools: TOOLS, messages }, { signal: controller.signal });
       messages.push({ role: "assistant", content: res.content });
-      const rationale = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(" ").trim();
+      const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(" ").trim();
       const uses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
 
       if (uses.length === 0) {
-        if (nudged) throw new Error("The agent stopped without proposing a re-plan.");
+        if (nudged) throw new Error(`The agent stopped without proposing a re-plan (${res.stop_reason} ${JSON.stringify((res as unknown as { stop_details?: unknown }).stop_details ?? null)}): ${text.slice(0, 400)}`);
         nudged = true;
         messages.push({ role: "user", content: "Call propose_replan now with your proposal." });
         continue;
@@ -140,7 +152,17 @@ export async function investigateSlip({ projectId, checkinId, stepId, emit }: In
             results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: z.prettifyError(parsed.error) });
             continue;
           }
+          emit({ type: "stage", id: "check", status: "running", label: "Checking the proposal against the manageability rules" });
+          const report = check(parsed.data);
+          if (!report.passed && !revised) {
+            revised = true;
+            const failed = report.checks.filter((c) => !c.passed).map((c) => `${c.name}: ${c.details.slice(0, 6).join("; ")}`).join("\n");
+            emit({ type: "stage", id: "check", status: "running", label: "Proposal failed a check. The agent is revising it once", detail: report.checks.filter((c) => !c.passed).map((c) => c.name).join("; ") });
+            results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: `The proposal fails these checks:\n${failed}\nCall propose_replan again with a corrected proposal.` });
+            continue;
+          }
           replan = parsed.data;
+          finalReport = report;
           results.push({ type: "tool_result", tool_use_id: use.id, content: "Received." });
           continue;
         }
@@ -150,7 +172,7 @@ export async function investigateSlip({ projectId, checkinId, stepId, emit }: In
         }
         calls += 1;
         seq += 1;
-        const input = use.input as Record<string, string>;
+        const { why: rationale = "", ...input } = use.input as Record<string, string>;
         emit({ type: "tool", seq, tool: use.name, input, rationale, status: "running" });
         const output = await runTool(projectId, use.name, input);
         await db().from("agent_tool_calls").insert({ run_id: run.id, seq, tool_name: use.name, tool_input: input, tool_output: output, rationale: rationale || null });
@@ -170,15 +192,7 @@ export async function investigateSlip({ projectId, checkinId, stepId, emit }: In
   const plan = replan as Replan | null;
   if (!plan) throw new Error("The agent stopped without proposing a re-plan.");
 
-  emit({ type: "stage", id: "check", status: "running", label: "Checking the proposal against the manageability rules" });
-  const { data: steps } = await db().from("steps").select("*").eq("project_id", projectId);
-  const { data: deps } = await db()
-    .from("step_dependencies")
-    .select("step_id, depends_on_step_id")
-    .in("step_id", (steps ?? []).map((s) => s.id));
-  const projectDeps = (deps ?? []) as Dependency[];
-  const after = applyInMemory((steps ?? []) as Step[], projectDeps, plan.changes);
-  const report = checkManageability({ ...after, members: team, projectDueDate: project.due_date });
+  const report = finalReport as ManageabilityReport;
   emit({ type: "stage", id: "check", status: report.passed ? "done" : "error", label: report.passed ? "Proposal passed every check" : "Proposal fails some checks. Handed to the team", detail: report.checks.filter((c) => !c.passed).map((c) => c.name).join("; ") });
 
   await db().from("agent_runs").update({ status: "done", tool_calls: calls, output: plan, duration_ms: null }).eq("id", run.id);
