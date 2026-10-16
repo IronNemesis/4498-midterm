@@ -15,3 +15,5 @@ next-env.d.ts
 /coverage
 npm-debug.log*
 .vercel
+docs/rubric.txt
+scripts/team.local.json
