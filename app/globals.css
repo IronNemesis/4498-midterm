@@ -47,3 +47,143 @@ a {
     color-scheme: dark;
   }
 }
+
+:root {
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --card: #f9fafb;
+  --accent: #1d4ed8;
+  --ok: #15803d;
+  --bad: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --muted: #9ca3af;
+    --line: #262626;
+    --card: #141414;
+    --accent: #60a5fa;
+    --ok: #4ade80;
+    --bad: #f87171;
+  }
+}
+
+.wrap {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.card {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+h1 {
+  font-size: 1.6rem;
+  margin-bottom: 0.25rem;
+}
+h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0.6rem;
+}
+input,
+textarea,
+button,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+}
+textarea {
+  width: 100%;
+  resize: vertical;
+}
+button {
+  cursor: pointer;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.grid {
+  display: grid;
+  gap: 0.6rem;
+}
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.person {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.6rem;
+  background: var(--background);
+}
+.stage {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  align-items: baseline;
+}
+.badge {
+  font-size: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 0.05rem 0.5rem;
+  white-space: nowrap;
+}
+.ok {
+  color: var(--ok);
+}
+.bad {
+  color: var(--bad);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .row2 {
+    grid-template-columns: 1fr;
+  }
+}

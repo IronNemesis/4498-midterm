@@ -16,4 +16,3 @@ next-env.d.ts
 npm-debug.log*
 .vercel
 docs/rubric.txt
-scripts/team.local.json

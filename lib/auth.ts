@@ -22,14 +22,27 @@ export async function authClient() {
   });
 }
 
-// The signed-in team member, or null. A member's id equals their Supabase Auth user id (see scripts/seed.ts).
-export async function currentMember(): Promise<{ email: string; member: Member & { project_id: string } } | null> {
+export async function currentUser(): Promise<{ id: string; email: string } | null> {
   const supabase = await authClient();
   const { data } = await supabase.auth.getUser();
-  if (!data.user) return null;
-  const { data: member } = await db().from("members").select("*").eq("id", data.user.id).maybeSingle();
-  if (!member) return null;
-  return { email: data.user.email ?? "", member };
+  if (!data.user?.email) return null;
+  return { id: data.user.id, email: data.user.email.toLowerCase() };
+}
+
+export type CurrentMember = { email: string; member: Member & { project_id: string; email: string | null } };
+
+// The signed-in person's team membership (latest project), matched by email. Null if they are on no project yet.
+export async function currentMember(): Promise<CurrentMember | null> {
+  const user = await currentUser();
+  if (!user) return null;
+  const { data: member } = await db()
+    .from("members")
+    .select("*")
+    .ilike("email", user.email)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return member ? { email: user.email, member } : null;
 }
 
 export function unauthorized() {
