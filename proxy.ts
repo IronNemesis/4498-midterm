@@ -6,7 +6,16 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
+    // Let /api/health through so it can report exactly which variables are missing.
+    if (request.nextUrl.pathname === "/api/health") return response;
+    const missing = [!url && "SUPABASE_URL", !key && "SUPABASE_PUBLISHABLE_KEY"].filter(Boolean).join(", ");
+    return new NextResponse(`Server misconfigured: missing environment variable(s) ${missing}. Add them in Vercel and redeploy.`, { status: 500 });
+  }
+
+  const supabase = createServerClient(url, key, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
