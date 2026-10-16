@@ -25,7 +25,7 @@ Plan one group project and keep it on track until submission.
 
 | ID | Task | Type | Level | Performed by |
 |---|---|---|---|---|
-| T1 | Retrieve inputs (Canvas feed due date, rubric, team profiles) | Retrieve | 1 | Code |
+| T1 | Retrieve inputs (rubric, due date, team profiles) from the setup form and database | Retrieve | 1 | Code |
 | T2 | Break rubric into small, owned, dated steps | Reason | 2 | Claude (one call, uses the `rubric-to-step-plan` skill) |
 | T3 | Verify plan is manageable | Verify | 1 | Code |
 | H1 | Team approves plan | Decide | 0 | Team |
@@ -55,10 +55,11 @@ The investigation trace (tool calls, in order, with what each returned) is shown
 - **Model:** Anthropic model via the Messages API for T2 and T4. Exact model ID to be copied from the Week 6 model workbook and confirmed with the API key before the build.
 - **No model** for T1 (parsing) and T3 (deterministic checks).
 - **Tools** (direct integration, no MCP):
-  - `fetch_canvas_feed`: HTTP GET plus iCalendar parse, read-only. Feed URL is a private link; kept in `.env`, never committed.
-  - `save_record` / `query_plan`: SQLite writes and reads.
+  - `save_record` / `query_plan`: Supabase (Postgres) writes and reads through the server, using the secret key (server-side only, never in the browser).
   - `check_manageability`: runs the T3 checks.
-  - T4 read-only tools: `get_task`, `get_checkin_history`, `get_member_load`, `get_dependencies`, and `get_member_calendar_load` (stretch; real feed for one member, sample `.ics` files for the rest).
+  - T4 read-only tools: `get_task`, `get_checkin_history` (including free-text notes such as "midterms this week"), `get_member_load`, `get_dependencies`.
+- **Stack:** Next.js (React and TypeScript) with API routes; Supabase for shared state.
+- **No Canvas integration.** The due date is typed into the setup form.
 
 ## 5. Skill Decision
 

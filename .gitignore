@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+API Keys/
+.DS_Store
+node_modules/
+__pycache__/
+*.db
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+*.pem
+/coverage
+npm-debug.log*
+.vercel
